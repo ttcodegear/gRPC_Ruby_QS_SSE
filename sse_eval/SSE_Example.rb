@@ -56,6 +56,7 @@ class ScriptEvalReplyEnumerator
         end
         all_results = []
         all_args.each do |script_args|
+          result = Float::NAN
           begin
             args = BindObject.new(script_args)
             eval(@header.script, args.bind)
@@ -63,11 +64,10 @@ class ScriptEvalReplyEnumerator
             if result.kind_of?(String)
               result = result.to_f
             end
-            all_results.push(result)
           rescue Exception => ex
             puts ex
-            raise
           end
+          all_results.push(result)
         end
         response_rows = Qlik::Sse::BundledRows.new
         all_results.each do |result|
@@ -81,25 +81,25 @@ class ScriptEvalReplyEnumerator
       end
     else
       return enum_for(:each_item) unless block_given?
+      script_args = []
+      result = Float::NAN
       begin
-        script_args = []
         args = BindObject.new(script_args)
         eval(@header.script, args.bind)
         result = args.result
         if result.kind_of?(String)
           result = result.to_f
         end
-        dual = Qlik::Sse::Dual.new
-        dual.numData = result
-        row = Qlik::Sse::Row.new
-        row.duals.push(dual)
-        reply = Qlik::Sse::BundledRows.new
-        reply.rows.push(row)
-        yield reply
       rescue Exception => ex
         puts ex
-        raise
       end
+      dual = Qlik::Sse::Dual.new
+      dual.numData = result
+      row = Qlik::Sse::Row.new
+      row.duals.push(dual)
+      reply = Qlik::Sse::BundledRows.new
+      reply.rows.push(row)
+      yield reply
     end
   end
 end
@@ -115,18 +115,64 @@ class ScriptAggrStrReplyEnumerator
 
   def each_item
     puts 'script=' + @header.script
-    return enum_for(:each_item) unless block_given?
-    @requests.each do |request|
-      response_rows = Qlik::Sse::BundledRows.new
-      request.rows.each do |row|
-        result = row.duals[0].numData + row.duals[1].numData # row=[Col1,Col2]
+    # パラメータがあるか否かをチェック
+    if !@header.params.empty?
+      return enum_for(:each_item) unless block_given?
+      @requests.each do |request|
+        all_args = []
+        request.rows.each do |row|
+          script_args = []
+          @header.params.zip(row.duals) { |param, dual|
+            if param.dataType.to_s == 'STRING' || param.dataType.to_s == 'DUAL'
+              script_args.push(dual.strData)
+            else
+              script_args.push(dual.numData)
+            end
+          }
+          all_args.push(script_args)
+        end
+        puts 'args='
+        p all_args
+        result = ''
+        begin
+          args = BindObject.new(all_args)
+          eval(@header.script, args.bind)
+          result = args.result
+          if !result.kind_of?(String)
+            result = result.to_s
+          end
+        rescue Exception => ex
+          puts ex
+        end
         dual = Qlik::Sse::Dual.new
-        dual.numData = result
+        dual.strData = result
         row = Qlik::Sse::Row.new
         row.duals.push(dual)
-        response_rows.rows.push(row)
+        reply = Qlik::Sse::BundledRows.new
+        reply.rows.push(row)
+        yield reply
       end
-      yield response_rows
+    else
+      return enum_for(:each_item) unless block_given?
+      script_args = []
+      result = ''
+      begin
+        args = BindObject.new(script_args)
+        eval(@header.script, args.bind)
+        result = args.result
+        if !result.kind_of?(String)
+          result = result.to_s
+        end
+      rescue Exception => ex
+        puts ex
+      end
+      dual = Qlik::Sse::Dual.new
+      dual.strData = result
+      row = Qlik::Sse::Row.new
+      row.duals.push(dual)
+      reply = Qlik::Sse::BundledRows.new
+      reply.rows.push(row)
+      yield reply
     end
   end
 end
