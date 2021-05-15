@@ -307,3 +307,37 @@ SSEPlugin=Column,localhost:50053
 
 ------
 
+[for SSL]
+
+------
+
+...
+
+files = ['./root_cert.pem', './sse_server_key.pem', './sse_server_cert.pem']
+
+certs = files.map { |f| File.open(f).read }
+
+server_creds = GRPC::Core::ServerCredentials.new(
+
+        certs[0], [{private_key: certs[1], cert_chain: certs[2]}], false)
+
+...
+
+server.add_http2_port('0.0.0.0:50053', server_creds)
+
+...
+
+------
+
+C:\Users\[user]\Documents\Qlik\Sense\Settings.ini
+
+------
+
+[Settings 7]
+
+SSEPlugin=Column,localhost:50053,C:\...\sse_Column_generated_certs\sse_Column_client_certs_used_by_qlik
+
+
+
+------
+
