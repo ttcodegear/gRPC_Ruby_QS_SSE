@@ -248,7 +248,6 @@ class ExtensionService < Qlik::Sse::Connector::Service
 
     header = Qlik::Sse::ScriptRequestHeader.decode(call.metadata['qlik-scriptrequestheader-bin'])
     func_name = getFunctionName(header)
-puts func_name
     if func_name == 'ScriptEval' || func_name == 'ScriptEvalEx'
       return ScriptEvalReplyEnumerator.new(header, requests).each_item
     end
